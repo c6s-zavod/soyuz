@@ -65,7 +65,7 @@ func (h *Hub) Inbound() <-chan Envelope {
 // GenerateAuthToken creates an HMAC token for authentication handshakes.
 func (h *Hub) GenerateAuthToken(peerID string, ts time.Time) string {
 	mac := hmac.New(sha256.New, []byte(h.secret))
-	mac.Write([]byte(fmt.Sprintf("%s:%s:%d", h.selfID, peerID, ts.Unix())))
+	_, _ = fmt.Fprintf(mac, "%s:%s:%d", h.selfID, peerID, ts.Unix())
 
 	return hex.EncodeToString(mac.Sum(nil))
 }
@@ -82,7 +82,7 @@ func (h *Hub) VerifyAuthToken(remoteID, token string, timestamp int64) bool {
 	}
 
 	mac := hmac.New(sha256.New, []byte(h.secret))
-	mac.Write([]byte(fmt.Sprintf("%s:%s:%d", remoteID, h.selfID, timestamp)))
+	_, _ = fmt.Fprintf(mac, "%s:%s:%d", remoteID, h.selfID, timestamp)
 	expected := hex.EncodeToString(mac.Sum(nil))
 
 	return hmac.Equal([]byte(token), []byte(expected))
@@ -123,9 +123,9 @@ func (h *Hub) Dial(ctx context.Context, peerID, addr string) error {
 
 	opts := &websocket.DialOptions{
 		HTTPHeader: http.Header{
-			HeaderWorkerID:       []string{h.selfID},
-			"X-C6S-Auth-Token":   []string{token},
-			"X-C6S-Auth-Time":    []string{strconv.FormatInt(now.Unix(), 10)},
+			HeaderWorkerID:     []string{h.selfID},
+			"X-C6S-Auth-Token": []string{token},
+			"X-C6S-Auth-Time":  []string{strconv.FormatInt(now.Unix(), 10)},
 		},
 	}
 
@@ -137,7 +137,7 @@ func (h *Hub) Dial(ctx context.Context, peerID, addr string) error {
 		return fmt.Errorf("websocket dial to %s (%s): %w", peerID, addr, err)
 	}
 
-	conn := NewConn(peerID, addr, true, wsConn, h.inbound)
+	conn := NewConn(peerID, addr, true, wsConn, h.inbound) //nolint:contextcheck
 
 	h.mu.Lock()
 	if existing, ok := h.peers[peerID]; ok {
@@ -241,6 +241,6 @@ func (h *Hub) HandleHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	conn := NewConn(remoteID, r.RemoteAddr, false, wsConn, h.inbound)
+	conn := NewConn(remoteID, r.RemoteAddr, false, wsConn, h.inbound) //nolint:contextcheck
 	h.AddConn(conn)
 }

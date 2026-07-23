@@ -14,10 +14,10 @@ type ErrorResponse struct {
 }
 
 // WriteJSON serializes v into a JSON HTTP response with status code.
-func WriteJSON(w http.ResponseWriter, status int, v any) {
+func WriteJSON(w http.ResponseWriter, statusCode int, v any) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
+	w.WriteHeader(statusCode)
+	_ = json.NewEncoder(w).Encode(v) //nolint:errchkjson
 }
 
 // WriteError writes a standard ErrorResponse.

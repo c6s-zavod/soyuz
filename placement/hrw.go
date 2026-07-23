@@ -49,7 +49,7 @@ func SelectReplicas(key string, activePeers []string, count int) []string {
 	}
 
 	result := make([]string, count)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		result[i] = scores[i].peerID
 	}
 

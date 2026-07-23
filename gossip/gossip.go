@@ -1,3 +1,4 @@
+// Package gossip implements epoch-based watermark anti-entropy synchronization.
 package gossip
 
 import (

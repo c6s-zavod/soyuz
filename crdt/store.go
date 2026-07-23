@@ -1,9 +1,11 @@
+// Package crdt implements a thread-safe Last-Write-Wins (LWW) key-value store.
 package crdt
 
 import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 	"sync"
 	"time"
@@ -123,9 +125,7 @@ func (s *Store) Snapshot() Payload {
 	nsMap := make(map[string]map[string]Record, len(s.data))
 	for ns, items := range s.data {
 		itemsMap := make(map[string]Record, len(items))
-		for k, rec := range items {
-			itemsMap[k] = rec
-		}
+		maps.Copy(itemsMap, items)
 		nsMap[ns] = itemsMap
 	}
 

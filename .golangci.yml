@@ -1,0 +1,106 @@
+version: "2"
+
+run:
+  timeout: 5m
+  issues-exit-code: 1
+  tests: true
+
+linters:
+  disable:
+    - errcheck
+    - funcorder
+    - exhaustruct
+    - gochecknoglobals
+  enable:
+    - ineffassign
+    - staticcheck
+    - bidichk
+    - containedctx
+    - contextcheck
+    - copyloopvar
+    - dupl
+    - dupword
+    - durationcheck
+    - errchkjson
+    - errname
+    - errorlint
+    - exhaustive
+    - gochecksumtype
+    - goconst
+    - gocritic
+    - gocyclo
+    - godot
+    - godox
+    - gosec
+    - govet
+    - grouper
+    - iface
+    - importas
+    - inamedparam
+    - intrange
+    - iotamixing
+    - ireturn
+    - loggercheck
+    - misspell
+    - mnd
+    - modernize
+    - nestif
+    - nilerr
+    - nilnil
+    - nlreturn
+    - noctx
+    - nonamedreturns
+    - perfsprint
+    - prealloc
+    - predeclared
+    - promlinter
+    - revive
+    - recvcheck
+    - tagalign
+    - testifylint
+    - thelper
+    - unused
+    - unconvert
+    - unparam
+    - usestdlibvars
+    - usetesting
+  settings:
+    mnd:
+      ignored-numbers:
+        - '0600'
+        - '0644'
+        - '0750'
+        - '0755'
+    goconst:
+      ignore-tests: true
+    godox:
+      keywords:
+        - NOTE
+        - OPTIMIZE
+        - HACK
+        - TODO
+        - FIXME
+    staticcheck:
+      checks:
+        - "all"
+    revive:
+      rules:
+        - name: exported
+          disabled: true
+        - name: package-comments
+          disabled: true
+        - name: unused-parameter
+          disabled: true
+        - name: blank-imports
+          disabled: true
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+formatters:
+  enable:
+    - gofmt
+  settings:
+    gofmt:
+      simplify: true

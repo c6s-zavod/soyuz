@@ -195,6 +195,7 @@ func (c *Conn) readLoop() {
 
 // handleInternalFrame handles ping/pong message types.
 func (c *Conn) handleInternalFrame(ctx context.Context, f Frame) bool {
+	//nolint:exhaustive
 	switch f.Type {
 	case MsgPing:
 		ctx, cancel := context.WithTimeout(ctx, pingTimeout)

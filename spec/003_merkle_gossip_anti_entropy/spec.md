@@ -15,16 +15,15 @@
 Nodes must synchronize CRDT state updates periodically without transmitting full state data across the network when no changes have occurred.
 
 ### 1.2 Proposed Solution
-Implement package `soyuz/gossip`:
-- Flat 256-bucket key space partitioning (`ComputeDigestMap`).
-- SHA-256 bucket digest calculation for fast range comparison.
-- `Gossiper` runner loop driving background anti-entropy rounds against all active peerwire hub peers.
+Implement package `soyuz/gossip` with a **dual-mode anti-entropy engine**:
+1. **Direct Push Sync (`PushSync`)**: Sends full state snapshot (`MsgGossipPush`). Ideal for `c6s` control-plane state (low key count, fast 1-round convergence).
+2. **Merkle Range Exchange Sync (`MerkleSync`)**: 256-bucket key space partitioning (`ComputeDigestMap`, `MismatchedBuckets`, `MsgStateReq`/`MsgStateResp`). Ideal for `s3d` high-cardinality storage metadata (millions of keys, avoids transmitting unmodified state).
 
 ### 1.3 Scope & Requirements
 * **In Scope:**
-  * SHA-256 bucket partitioning and digest computation.
-  * `MismatchedBuckets` comparison between local and remote digest maps.
-  * Gossip message dispatch (`MsgGossipPush`) over `peerwire.Hub`.
+  * Direct snapshot push sync for control-plane workloads (`c6s`).
+  * 256-bucket SHA-256 Merkle digest computation and bucket mismatch detection for high-cardinality metadata (`s3d`).
+  * Frame dispatch (`MsgGossipPush`, `MsgStateReq`, `MsgStateResp`) over `peerwire.Hub`.
 * **Out of Scope:**
   * Hierarchical Merkle trees (deferred to future scaling revision).
 

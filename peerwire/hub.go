@@ -215,6 +215,21 @@ func (h *Hub) ActivePeers() []string {
 	return out
 }
 
+// Close shuts down all active peer connections.
+func (h *Hub) Close() error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	for id, conn := range h.peers {
+		if conn != nil {
+			_ = conn.Close()
+		}
+		delete(h.peers, id)
+	}
+
+	return nil
+}
+
 // HandleHTTP handles inbound WebSocket handshake requests.
 func (h *Hub) HandleHTTP(w http.ResponseWriter, r *http.Request) {
 	remoteID := r.Header.Get(HeaderWorkerID)

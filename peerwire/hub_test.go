@@ -2,6 +2,10 @@ package peerwire_test
 
 import (
 	"bytes"
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -48,5 +52,69 @@ func TestAuthTokenVerification(t *testing.T) {
 
 	if receiverHub.VerifyAuthToken("node-1", token, now.Add(-10*time.Minute).Unix()) {
 		t.Error("expected expired token verification to fail")
+	}
+}
+
+func TestHubHandshakeAndCommunication(t *testing.T) {
+	secret := "shared-secret"
+	hubA := peerwire.New("node-a", secret)
+	hubB := peerwire.New("node-b", secret)
+	defer func() { _ = hubA.Close() }()
+	defer func() { _ = hubB.Close() }()
+
+	srv := httptest.NewServer(http.HandlerFunc(hubA.HandleHTTP))
+	defer srv.Close()
+
+	addr := strings.TrimPrefix(srv.URL, "http://")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	connB, err := hubB.Dial(ctx, "node-a", addr)
+	if err != nil {
+		t.Fatalf("Hub B failed to dial Hub A: %v", err)
+	}
+
+	// Hub A should register the inbound connection keyed by Hub B's node ID.
+	var connA *peerwire.Conn
+	for range 50 {
+		var ok bool
+		connA, ok = hubA.Conn("node-b")
+		if ok {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if connA == nil {
+		t.Fatal("Hub A failed to register connection from Hub B")
+	}
+
+	reqPayload := []byte("hello from b")
+	respPayload := []byte("hello back from a")
+
+	go func() {
+		select {
+		case <-ctx.Done():
+			return
+		case env := <-hubA.Inbound():
+			if env.Frame.Type == peerwire.MsgVimpelVoteReq {
+				_ = connA.Send(ctx, peerwire.Frame{
+					Type:      peerwire.MsgVimpelVoteResp,
+					RequestID: env.Frame.RequestID,
+					Payload:   respPayload,
+				})
+			}
+		}
+	}()
+
+	resp, err := connB.Request(ctx, peerwire.Frame{Type: peerwire.MsgVimpelVoteReq, Payload: reqPayload})
+	if err != nil {
+		t.Fatalf("Hub B request failed: %v", err)
+	}
+	if resp.Type != peerwire.MsgVimpelVoteResp {
+		t.Errorf("expected response type MsgVimpelVoteResp, got %v", resp.Type)
+	}
+	if !bytes.Equal(resp.Payload, respPayload) {
+		t.Errorf("expected response payload %q, got %q", respPayload, resp.Payload)
 	}
 }

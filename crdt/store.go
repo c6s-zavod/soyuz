@@ -15,6 +15,10 @@ import (
 type Store struct {
 	mu   sync.RWMutex
 	data map[string]map[string]Record
+
+	// changeHook, if set, is invoked (outside the lock) after Set or Merge with
+	// the namespace and the keys whose value actually changed (won LWW).
+	changeHook func(namespace string, keys []string)
 }
 
 // New constructs an empty in-memory CRDT store.
@@ -22,6 +26,17 @@ func New() *Store {
 	return &Store{
 		data: make(map[string]map[string]Record),
 	}
+}
+
+// SetChangeHook registers a callback invoked after Set/Merge with the keys whose
+// value won LWW and changed. It fires for both local writes and anti-entropy
+// merges, so a subscriber sees every record that enters the store regardless of
+// path. The hook runs outside the store lock; it must not block indefinitely.
+func (s *Store) SetChangeHook(fn func(namespace string, keys []string)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.changeHook = fn
 }
 
 // Set inserts or updates a key in the given namespace using LWW logic.
@@ -41,7 +56,6 @@ func (s *Store) Set(namespace, key string, value any) error {
 	}
 
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	ns, ok := s.data[namespace]
 	if !ok {
@@ -50,8 +64,15 @@ func (s *Store) Set(namespace, key string, value any) error {
 	}
 
 	existing, found := ns[key]
-	if !found || isLWWWinner(rec, existing) {
+	changed := !found || isLWWWinner(rec, existing)
+	if changed {
 		ns[key] = rec
+	}
+	hook := s.changeHook
+	s.mu.Unlock()
+
+	if changed && hook != nil {
+		hook(namespace, []string{key})
 	}
 
 	return nil
@@ -135,7 +156,8 @@ func (s *Store) Snapshot() Payload {
 // Merge merges an incoming snapshot into the local store using LWW rule.
 func (s *Store) Merge(p Payload) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
+
+	var changed map[string][]string
 
 	for nsName, items := range p.Namespaces {
 		ns, ok := s.data[nsName]
@@ -148,7 +170,20 @@ func (s *Store) Merge(p Payload) {
 			existing, found := ns[k]
 			if !found || isLWWWinner(incoming, existing) {
 				ns[k] = incoming
+				if changed == nil {
+					changed = make(map[string][]string)
+				}
+				changed[nsName] = append(changed[nsName], k)
 			}
+		}
+	}
+
+	hook := s.changeHook
+	s.mu.Unlock()
+
+	if hook != nil {
+		for nsName, keys := range changed {
+			hook(nsName, keys)
 		}
 	}
 }

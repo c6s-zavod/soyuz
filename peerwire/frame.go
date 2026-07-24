@@ -37,6 +37,12 @@ const (
 	MsgVimpelHeartbeatReq MsgType = 0x0b
 	// MsgVimpelHeartbeatResp acknowledges a lock heartbeat.
 	MsgVimpelHeartbeatResp MsgType = 0x0c
+	// MsgHolderNotify announces local presence or deletion of a CAS cid to its homes.
+	MsgHolderNotify MsgType = 0x0d
+	// MsgHolderQuery asks a home node which peers hold a given cid.
+	MsgHolderQuery MsgType = 0x0e
+	// MsgHolderResp returns the known live holders of a cid.
+	MsgHolderResp MsgType = 0x0f
 )
 
 // maxPayloadSize limits incoming frame size to 16MB to prevent memory exhaustion.

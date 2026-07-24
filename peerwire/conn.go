@@ -234,5 +234,6 @@ func (c *Conn) Close() error {
 
 // isResponse checks whether a message type is a response to an earlier request.
 func isResponse(t MsgType) bool {
-	return t == MsgVimpelVoteResp || t == MsgVimpelHeartbeatResp || t == MsgStateResp || t == MsgBlockResp || t == MsgPong
+	return t == MsgVimpelVoteResp || t == MsgVimpelHeartbeatResp || t == MsgStateResp ||
+		t == MsgBlockResp || t == MsgPong || t == MsgHolderResp
 }

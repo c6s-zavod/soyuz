@@ -26,10 +26,11 @@ type StateRespPayload struct {
 
 // Gossiper runs background Epoch-watermark anti-entropy rounds across the cluster.
 type Gossiper struct {
-	store    *crdt.Store
-	hub      *peerwire.Hub
-	selfID   string
-	interval time.Duration
+	store      *crdt.Store
+	hub        *peerwire.Hub
+	selfID     string
+	interval   time.Duration
+	IntervalFn func() time.Duration
 }
 
 // New constructs a Gossiper bound to a CRDT store and Peerwire hub.
@@ -42,9 +43,21 @@ func New(store *crdt.Store, hub *peerwire.Hub, selfID string) *Gossiper {
 	}
 }
 
+// SetIntervalFn sets a dynamic callback to query the sync interval before each round.
+func (g *Gossiper) SetIntervalFn(fn func() time.Duration) {
+	g.IntervalFn = fn
+}
+
 // Run executes anti-entropy rounds until ctx is cancelled.
 func (g *Gossiper) Run(ctx context.Context) error {
-	ticker := time.NewTicker(g.interval)
+	currentInterval := g.interval
+	if g.IntervalFn != nil {
+		if d := g.IntervalFn(); d > 0 {
+			currentInterval = d
+		}
+	}
+
+	ticker := time.NewTicker(currentInterval)
 	defer ticker.Stop()
 
 	for {
@@ -53,6 +66,13 @@ func (g *Gossiper) Run(ctx context.Context) error {
 			return nil
 		case <-ticker.C:
 			g.Round(ctx)
+
+			if g.IntervalFn != nil {
+				if next := g.IntervalFn(); next > 0 && next != currentInterval {
+					currentInterval = next
+					ticker.Reset(currentInterval)
+				}
+			}
 		}
 	}
 }

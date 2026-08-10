@@ -19,6 +19,10 @@ type Store struct {
 	// changeHook, if set, is invoked (outside the lock) after Set or Merge with
 	// the namespace and the keys whose value actually changed (won LWW).
 	changeHook func(namespace string, keys []string)
+
+	// compareFn, if set, overrides the default isLWWWinner rule.
+	// It returns true if incoming wins over existing.
+	compareFn func(namespace, key string, incoming, existing Record) bool
 }
 
 // New constructs an empty in-memory CRDT store.
@@ -39,6 +43,52 @@ func (s *Store) SetChangeHook(fn func(namespace string, keys []string)) {
 	s.changeHook = fn
 }
 
+// SetCompareHook registers a custom comparison function to override the default LWW wins rule.
+func (s *Store) SetCompareHook(fn func(namespace, key string, incoming, existing Record) bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.compareFn = fn
+}
+
+func (s *Store) wins(namespace, key string, incoming, existing Record) bool {
+	if s.compareFn != nil {
+		return s.compareFn(namespace, key, incoming, existing)
+	}
+
+	return isLWWWinner(incoming, existing)
+}
+
+// SetRecord inserts or updates a pre-constructed Record in the given namespace using LWW logic.
+// It returns true if the incoming record won LWW and updated the store.
+func (s *Store) SetRecord(namespace, key string, rec Record) (bool, error) {
+	s.mu.Lock()
+
+	ns, ok := s.data[namespace]
+	if !ok {
+		ns = make(map[string]Record)
+		s.data[namespace] = ns
+	}
+
+	existing, found := ns[key]
+	changed := !found || s.wins(namespace, key, rec, existing)
+	if changed {
+		cloned := rec
+		if len(rec.Value) > 0 {
+			cloned.Value = slices.Clone(rec.Value)
+		}
+		ns[key] = cloned
+	}
+	hook := s.changeHook
+	s.mu.Unlock()
+
+	if changed && hook != nil {
+		hook(namespace, []string{key})
+	}
+
+	return changed, nil
+}
+
 // Set inserts or updates a key in the given namespace using LWW logic.
 func (s *Store) Set(namespace, key string, value any) error {
 	var raw json.RawMessage
@@ -55,27 +105,9 @@ func (s *Store) Set(namespace, key string, value any) error {
 		Timestamp: time.Now().UnixNano(),
 	}
 
-	s.mu.Lock()
+	_, err := s.SetRecord(namespace, key, rec)
 
-	ns, ok := s.data[namespace]
-	if !ok {
-		ns = make(map[string]Record)
-		s.data[namespace] = ns
-	}
-
-	existing, found := ns[key]
-	changed := !found || isLWWWinner(rec, existing)
-	if changed {
-		ns[key] = rec
-	}
-	hook := s.changeHook
-	s.mu.Unlock()
-
-	if changed && hook != nil {
-		hook(namespace, []string{key})
-	}
-
-	return nil
+	return err
 }
 
 // Get fetches a key from the given namespace if it exists and is not tombstoned.
@@ -96,6 +128,24 @@ func (s *Store) Get(namespace, key string) (Record, bool) {
 	return rec, true
 }
 
+// GetRecord fetches a key from the given namespace, returning the record even if tombstoned.
+func (s *Store) GetRecord(namespace, key string) (Record, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	ns, ok := s.data[namespace]
+	if !ok {
+		return Record{}, false
+	}
+
+	rec, ok := ns[key]
+	if !ok {
+		return Record{}, false
+	}
+
+	return rec, true
+}
+
 // Delete writes a tombstone for key in the given namespace.
 func (s *Store) Delete(namespace, key string) {
 	rec := Record{
@@ -103,19 +153,7 @@ func (s *Store) Delete(namespace, key string) {
 		Tombstone: true,
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	ns, ok := s.data[namespace]
-	if !ok {
-		ns = make(map[string]Record)
-		s.data[namespace] = ns
-	}
-
-	existing, found := ns[key]
-	if !found || isLWWWinner(rec, existing) {
-		ns[key] = rec
-	}
+	_, _ = s.SetRecord(namespace, key, rec)
 }
 
 // List returns all non-tombstoned key/record pairs in namespace.
@@ -168,8 +206,12 @@ func (s *Store) Merge(p Payload) {
 
 		for k, incoming := range items {
 			existing, found := ns[k]
-			if !found || isLWWWinner(incoming, existing) {
-				ns[k] = incoming
+			if !found || s.wins(nsName, k, incoming, existing) {
+				cloned := incoming
+				if len(incoming.Value) > 0 {
+					cloned.Value = slices.Clone(incoming.Value)
+				}
+				ns[k] = cloned
 				if changed == nil {
 					changed = make(map[string][]string)
 				}
@@ -195,6 +237,9 @@ func isLWWWinner(incoming, existing Record) bool {
 	}
 	if incoming.Timestamp != existing.Timestamp {
 		return incoming.Timestamp > existing.Timestamp
+	}
+	if incoming.Tombstone != existing.Tombstone {
+		return incoming.Tombstone
 	}
 
 	// Tie-break: content byte comparison (deterministic)

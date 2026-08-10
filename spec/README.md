@@ -12,3 +12,4 @@
 | 003 | Epoch-Based Watermark Anti-Entropy Gossip | ✅ COMPLETED | 2026-07-23 | 2026-07-23 | [spec.md](003_epoch_watermark_anti_entropy/spec.md) |
 | 004 | Rendezvous (HRW) Replica Placement Selector | ✅ COMPLETED | 2026-07-23 | 2026-07-23 | [spec.md](004_rendezvous_replica_placement/spec.md) |
 | 005 | HTTP REST API Response Helpers & Standard Error Contracts | ✅ COMPLETED | 2026-07-23 | 2026-07-23 | [spec.md](005_http_api_runtime/spec.md) |
+| 006 | Consolidate Soyuz Library | ✅ COMPLETED | 2026-08-10 | 2026-08-10 | [spec.md](006_consolidate_libraries/spec.md) |

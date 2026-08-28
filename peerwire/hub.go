@@ -52,6 +52,10 @@ type Hub struct {
 	dialing  map[string]chan struct{}
 	registry MeshRegistry
 
+	// dialClient overrides the HTTP client used for outbound dials. Nil leaves
+	// the WebSocket library its own default, which is the production path.
+	dialClient *http.Client
+
 	inbound chan Envelope
 }
 
@@ -65,6 +69,24 @@ func New(selfID, secret string) *Hub {
 		dialing: map[string]chan struct{}{},
 		inbound: make(chan Envelope, inboundQueueSize),
 	}
+}
+
+// SetDialClient overrides the HTTP client used for outbound peer dials. Passing
+// nil restores the library default.
+//
+// This exists for tests. A client whose transport refuses selected peers is how
+// a partition is constructed in a test process, rather than by manipulating the
+// host's firewall — which needs root, cannot run on a developer workstation,
+// and cannot produce an asymmetric split where one side still sees the other.
+//
+// It is not a production tuning knob. No configuration path sets it, and the
+// semantics of proxying or custom TLS on the peer mesh are deliberately
+// unspecified.
+func (h *Hub) SetDialClient(c *http.Client) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	h.dialClient = c
 }
 
 // SetDialPath overrides the WebSocket handshake route used when dialing peers
@@ -221,7 +243,13 @@ func (h *Hub) Dial(ctx context.Context, peerID, addr string) (*Conn, error) {
 
 	now := time.Now()
 	token := h.GenerateAuthToken(peerID, now)
-	url := fmt.Sprintf("ws://%s%s", addr, h.wsPath)
+
+	h.mu.RLock()
+	wsPath := h.wsPath
+	dialClient := h.dialClient
+	h.mu.RUnlock()
+
+	url := fmt.Sprintf("ws://%s%s", addr, wsPath)
 
 	opts := &websocket.DialOptions{
 		HTTPHeader: http.Header{
@@ -229,6 +257,9 @@ func (h *Hub) Dial(ctx context.Context, peerID, addr string) (*Conn, error) {
 			"X-C6S-Auth-Token": []string{token},
 			"X-C6S-Auth-Time":  []string{strconv.FormatInt(now.Unix(), 10)},
 		},
+		// Nil is what the library receives today, so the unset path is
+		// unchanged rather than merely equivalent.
+		HTTPClient: dialClient,
 	}
 
 	dialCtx, cancel := context.WithTimeout(ctx, dialTimeout)

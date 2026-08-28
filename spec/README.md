@@ -13,3 +13,4 @@
 | 004 | Rendezvous (HRW) Replica Placement Selector | ✅ COMPLETED | 2026-07-23 | 2026-07-23 | [spec.md](004_rendezvous_replica_placement/spec.md) |
 | 005 | HTTP REST API Response Helpers & Standard Error Contracts | ✅ COMPLETED | 2026-07-23 | 2026-07-23 | [spec.md](005_http_api_runtime/spec.md) |
 | 006 | Consolidate Soyuz Library | ✅ COMPLETED | 2026-08-10 | 2026-08-10 | [spec.md](006_consolidate_libraries/spec.md) |
+| 007 | Injectable Peerwire Transport Dialer | ✅ COMPLETED | 2026-08-28 | 2026-08-28 | [spec.md](007_injectable_transport_dialer/spec.md) |
